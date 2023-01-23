@@ -62,6 +62,23 @@ var mockOutSpawn = function (fp) {
     };
 };
 
+var mockOutSpawnSync = function (fp) {
+    var stdout = fs.readFileSync(fp).toString('utf-8');
+
+    return {
+        status: 2,
+        signal: null,
+        output: [
+            null,
+            stdout,
+            '',
+        ],
+        pid: 999999,
+        stdout,
+        stderr: '',
+    };
+};
+
 var createTestCase = function (platform, pingExecution) {
     var stubs = [];
 
@@ -262,6 +279,33 @@ describe('Ping in promise mode', function () {
     });
 });
 
+describe('Ping in sync mode', function () {
+    var pingExecution = function (fp, args) {
+        var stub = sinon.stub(cp, 'spawnSync').returns(mockOutSpawnSync(fp));
+
+        var ret = null;
+        var _args = args;
+        if (fp.includes('v6')) {
+            _args = _args || {};
+            _args.v6 = true;
+        }
+        ret = ping.sync.probe('whatever', _args);
+
+        stub.restore();
+
+        return ret.then(function (data) {
+            var answerKey = pathToAnswerKey(fp);
+            var actualData = data;
+            var expectData = ANSWER[answerKey];
+            expect(actualData).to.deep.equal(expectData);
+        });
+    };
+
+    PLATFORMS.forEach(function (platform) {
+        createTestCase(platform, pingExecution);
+    });
+});
+
 describe('Ping ipv6 on MAC OS', function () {
     var platform = 'darwin';
     var stubs = [];
@@ -316,6 +360,32 @@ describe('Ping in promise mode with unknown exception', function () {
             _args.v6 = true;
         }
         ret = ping.promise.probe('whatever', _args);
+
+        stub.restore();
+
+        return ret.catch(function (err) {
+            expect(err.message).to.be.a('string');
+            expect(err.message).to.include('Unknown error!');
+        });
+    };
+
+    PLATFORMS.forEach(function (platform) {
+        createTestCase(platform, pingExecution);
+    });
+});
+
+describe('Ping in sync mode with unknown exception', function () {
+    var pingExecution = function (fp, args) {
+        var unknownException = new Error('Unknown error!');
+        var stub = sinon.stub(cp, 'spawnSync').throws(unknownException);
+
+        var ret = null;
+        var _args = args;
+        if (fp.includes('v6')) {
+            _args = _args || {};
+            _args.v6 = true;
+        }
+        ret = ping.sync.probe('whatever', _args);
 
         stub.restore();
 
